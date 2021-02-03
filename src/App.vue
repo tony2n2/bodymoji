@@ -2,6 +2,7 @@
 	<div id="app">
 		<video id="video" playsinline></video>
 		<canvas id="output" />
+		<div class="emoji" :style="{ left: emojiX, top: emojiY }">x</div>
 	</div>
 </template>
 
@@ -136,29 +137,34 @@ function segmentPerson() {
 			internalResolution: 'medium',
 			segmentationThreshold: 0.7,
 		});
-
-
-		if (state.frame < 100) {
-			state.frame++;
-			requestAnimationFrame(bodySegmentationFrame);
+		if (personPart.allPoses[0].score > 0.4) {
+			let part = personPart.allPoses[0].keypoints[0];
+			this.$set(this, 'emojiX', Math.round(part.position.x) + 'px');
+			this.$set(this, 'emojiY', Math.round(part.position.y) + 'px');
 		}
+
+		requestAnimationFrame(bodySegmentationFrame.bind(this));
 	}
 
-	bodySegmentationFrame();
+	bodySegmentationFrame.call(this);
 }
 
 async function bindPage() {
 	state.net = await bodyPix.load();
 	await loadVideo();
-	segmentPerson();
+	segmentPerson.call(this);
 }
 
 navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
 
 export default {
 	name: 'app',
+	data: () => ({
+		emojiX: 0,
+		emojiY: 0,
+	}),
 	mounted: function() {
-		bindPage();
+		bindPage.call(this);
 	},
 };
 </script>
@@ -167,5 +173,9 @@ export default {
 body {
 	margin: 0;
 	width: 100%;
+}
+.emoji {
+	position: absolute;
+	color: white;
 }
 </style>
