@@ -129,9 +129,28 @@ async function loadVideo(cameraLabel) {
 	state.video.play();
 }
 
+function segmentPerson() {
+	async function bodySegmentationFrame() {
+		const personPart = await state.net.segmentPersonParts(state.video, {
+			flipHorizontal: false,
+			internalResolution: 'medium',
+			segmentationThreshold: 0.7,
+		});
+
+
+		if (state.frame < 100) {
+			state.frame++;
+			requestAnimationFrame(bodySegmentationFrame);
+		}
+	}
+
+	bodySegmentationFrame();
+}
+
 async function bindPage() {
 	state.net = await bodyPix.load();
 	await loadVideo();
+	segmentPerson();
 }
 
 navigator.getUserMedia = navigator.getUserMedia || navigator.webkitGetUserMedia || navigator.mozGetUserMedia;
