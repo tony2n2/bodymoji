@@ -2,12 +2,14 @@
 	<div id="app">
 		<video id="video" playsinline></video>
 		<canvas id="output" />
-		<div class="emoji" :style="{ left: emojiX, top: emojiY }">x</div>
+		<div class="emoji" :style="{ left: emojiX, top: emojiY }">{{ emoji }}</div>
 	</div>
 </template>
 
 <script>
 import * as bodyPix from '@tensorflow-models/body-pix';
+
+const emojis = ['😀', '🤪', '🙈', '🤬', '🤯', '🥶', '💩'];
 
 const state = {
 	video: null,
@@ -162,6 +164,7 @@ export default {
 	data: () => ({
 		emojiX: 0,
 		emojiY: 0,
+		emoji: emojis[Math.round(Math.random() * emojis.length - 1)],
 	}),
 	mounted: function() {
 		bindPage.call(this);
@@ -177,5 +180,7 @@ body {
 .emoji {
 	position: absolute;
 	color: white;
+	font-size: 50px;
+	transform: translate(-50%, -50%);
 }
 </style>
