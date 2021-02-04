@@ -1,8 +1,14 @@
 <template>
 	<div id="app">
 		<video id="video" playsinline></video>
-		<canvas id="output" />
-		<div class="emoji" :style="{ left: emojiX, top: emojiY }">{{ emoji }}</div>
+		<div class="emoji-container" :style="{ transform: emojiTransform }">
+			<div class="emoji">{{ emoji }}</div>
+		</div>
+		<select v-model="selectedCamera" @change="cameraChange">
+			<option v-for="camera in cameras" :value="camera.deviceId" :key="camera.deviceId" select>
+				{{ camera.label }}
+			</option>
+		</select>
 	</div>
 </template>
 
@@ -18,18 +24,6 @@ const state = {
 	videoConstraints: {},
 	frame: 0,
 };
-
-function isAndroid() {
-	return /Android/i.test(navigator.userAgent);
-}
-
-function isiOS() {
-	return /iPhone|iPad|iPod/i.test(navigator.userAgent);
-}
-
-function isMobile() {
-	return isAndroid() || isiOS();
-}
 
 async function getVideoInputs() {
 	if (!navigator.mediaDevices || !navigator.mediaDevices.enumerateDevices) {
@@ -53,50 +47,11 @@ function stopExistingVideoCapture() {
 	}
 }
 
-async function getDeviceIdForLabel(cameraLabel) {
-	const videoInputs = await getVideoInputs();
-
-	for (let i = 0; i < videoInputs.length; i++) {
-		const videoInput = videoInputs[i];
-		if (videoInput.label === cameraLabel) {
-			return videoInput.deviceId;
-		}
-	}
-
-	return null;
-}
-
-// on mobile, facing mode is the preferred way to select a camera.
-// Here we use the camera label to determine if its the environment or
-// user facing camera
-function getFacingMode(cameraLabel) {
-	if (!cameraLabel) {
-		return 'user';
-	}
-	if (cameraLabel.toLowerCase().includes('back')) {
-		return 'environment';
-	} else {
-		return 'user';
-	}
-}
-
-async function getConstraints(cameraLabel) {
-	let deviceId;
-	let facingMode;
-
-	if (cameraLabel) {
-		deviceId = await getDeviceIdForLabel(cameraLabel);
-		// on mobile, use the facing mode based on the camera.
-		facingMode = isMobile() ? getFacingMode(cameraLabel) : null;
-	}
-	return { deviceId, facingMode };
-}
-
 /**
  * Loads a the camera to be used in the demo
  *
  */
-async function setupCamera(cameraLabel) {
+async function setupCamera(deviceId) {
 	if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
 		throw new Error('Browser API navigator.mediaDevices.getUserMedia not available');
 	}
@@ -105,9 +60,7 @@ async function setupCamera(cameraLabel) {
 
 	stopExistingVideoCapture();
 
-	const videoConstraints = await getConstraints(cameraLabel);
-
-	const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: videoConstraints });
+	const stream = await navigator.mediaDevices.getUserMedia({ audio: false, video: { deviceId } });
 	videoElement.srcObject = stream;
 
 	return new Promise((resolve) => {
@@ -119,9 +72,9 @@ async function setupCamera(cameraLabel) {
 	});
 }
 
-async function loadVideo(cameraLabel) {
+async function loadVideo(deviceId) {
 	try {
-		state.video = await setupCamera(cameraLabel);
+		state.video = await setupCamera(deviceId);
 	} catch (e) {
 		let info = document.getElementById('info');
 		info.textContent = 'this browser does not support video capture,' + 'or this device does not have a camera';
@@ -139,12 +92,11 @@ function segmentPerson() {
 			internalResolution: 'medium',
 			segmentationThreshold: 0.7,
 		});
-		if (personPart.allPoses[0].score > 0.4) {
+		if (personPart.allPoses.length && personPart.allPoses[0].score > 0.4) {
 			let part = personPart.allPoses[0].keypoints[0];
-			this.$set(this, 'emojiX', Math.round(part.position.x) + 'px');
-			this.$set(this, 'emojiY', Math.round(part.position.y) + 'px');
+			this.$set(this, 'emojiX', Math.round((part.position.x / 640) * 100));
+			this.$set(this, 'emojiY', Math.round((part.position.y / 480) * 100));
 		}
-
 		requestAnimationFrame(bodySegmentationFrame.bind(this));
 	}
 
@@ -153,7 +105,12 @@ function segmentPerson() {
 
 async function bindPage() {
 	state.net = await bodyPix.load();
-	await loadVideo();
+	let cameras = await getVideoInputs();
+	if (cameras.length) {
+		this.$set(this, 'selectedCamera', cameras[0].deviceId);
+	}
+	this.$set(this, 'cameras', cameras);
+	await loadVideo(this.selectedCamera);
 	segmentPerson.call(this);
 }
 
@@ -165,7 +122,19 @@ export default {
 		emojiX: 0,
 		emojiY: 0,
 		emoji: emojis[Math.round(Math.random() * emojis.length - 1)],
+		selectedCamera: '',
+		cameras: [],
 	}),
+	computed: {
+		emojiTransform: function() {
+			return `translate(${this.emojiX}%, ${this.emojiY}%)`;
+		},
+	},
+	methods: {
+		cameraChange: function() {
+			loadVideo(this.selectedCamera);
+		},
+	},
 	mounted: function() {
 		bindPage.call(this);
 	},
@@ -182,5 +151,24 @@ body {
 	color: white;
 	font-size: 50px;
 	transform: translate(-50%, -50%);
+}
+.emoji-container {
+	position: absolute;
+	top: 0;
+	left: 0;
+	width: 100%;
+	height: 100%;
+	transition-property: transform;
+	transition-duration: 0.1s;
+	transition-timing-function: linear;
+}
+video {
+	width: 100vw;
+	height: 100vh;
+	object-fit: cover;
+}
+select {
+	position: absolute;
+	right: 0;
 }
 </style>
